@@ -9,34 +9,34 @@ public sealed class RepositorioFornecedorEmSql(ISqlConnectionFactory connectionF
     : IRepositorioFornecedor
 {
     private const string InserirSql = """
-        INSERT INTO [dbo].[TBFornecedor] ([Id], [Nome], [Telefone], [Cnpj])
+        INSERT INTO dbo.TBFornecedor (Id, Nome, Telefone, Cnpj)
         VALUES (@Id, @Nome, @Telefone, @Cnpj);
     """;
 
     private const string AtualizarSql = """
-        UPDATE [dbo].[TBFornecedor]
+        UPDATE dbo.TBFornecedor
         SET
-            [Nome] = @Nome,
-            [Telefone] = @Telefone,
-            [Cnpj] = @Cnpj
-        WHERE [Id] = @Id;
+            Nome = @Nome,
+            Telefone = @Telefone,
+            Cnpj = @Cnpj
+        WHERE Id = @Id;
     """;
 
     private const string ExcluirSql = """
-        DELETE FROM [dbo].[TBFornecedor]
-        WHERE [Id] = @Id;
+        DELETE FROM dbo.TBFornecedor
+        WHERE Id = @Id;
     """;
 
     private const string SelecionarPorIdSql = """
-        SELECT [Id], [Nome], [Telefone], [Cnpj]
-        FROM [dbo].[TBFornecedor]
-        WHERE [Id] = @Id;
+        SELECT Id, Nome, Telefone, Cnpj
+        FROM dbo.TBFornecedor
+        WHERE Id = @Id;
     """;
 
     private const string SelecionarTodosSql = """
-        SELECT [Id], [Nome], [Telefone], [Cnpj]
-        FROM [dbo].[TBFornecedor]
-        ORDER BY [Nome];
+        SELECT Id, Nome, Telefone, Cnpj
+        FROM dbo.TBFornecedor
+        ORDER BY Nome;
     """;
 
     public void Cadastrar(Fornecedor entidade)
