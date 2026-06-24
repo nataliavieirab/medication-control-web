@@ -1,5 +1,6 @@
 using System;
 using ControleDeMedicamentosWeb.WebApp.Compartilhado.Infra.Sql;
+using ControleDeMedicamentosWeb.WebApp.Modulos.ModuloEstoque.Dominio;
 using ControleDeMedicamentosWeb.WebApp.Modulos.ModuloFornecedor.Dominio;
 using ControleDeMedicamentosWeb.WebApp.Modulos.ModuloMedicamento.Dominio;
 using Dapper;
@@ -7,13 +8,15 @@ using Microsoft.Data.SqlClient;
 
 namespace ControleDeMedicamentosWeb.WebApp.Modulos.ModuloMedicamento.Infra;
 
-public sealed class RepositorioMedicamentoEmSql(ISqlConnectionFactory connectionFactory)
-    : IRepositorioMedicamento
+public sealed class RepositorioMedicamentoEmSql(
+    ISqlConnectionFactory connectionFactory,
+    IRepositorioRequisicao repositorioRequisicao
+) : IRepositorioMedicamento
 {
     private const string InserirMedicamentoSql = """
         INSERT INTO dbo.TBMedicamento (Id, Nome, Descricao, FornecedorId)
         VALUES (@Id, @Nome, @Descricao, @FornecedorId);
-        """;
+    """;
 
     private const string AtualizarMedicamentoSql = """
         UPDATE dbo.TBMedicamento
@@ -21,7 +24,7 @@ public sealed class RepositorioMedicamentoEmSql(ISqlConnectionFactory connection
             Descricao = @Descricao,
             FornecedorId = @FornecedorId
         WHERE Id = @Id;
-        """;
+    """;
 
     private const string ExcluirMedicamentoSql = """
         DELETE FROM dbo.TBMedicamento
@@ -119,7 +122,11 @@ public sealed class RepositorioMedicamentoEmSql(ISqlConnectionFactory connection
         if (medicamentoRow == null)
             return null;
 
-        return MapearMedicamento(medicamentoRow);
+        Medicamento medicamentoSelecionado = MapearMedicamento(medicamentoRow);
+
+        CarregarRequisicoes([medicamentoSelecionado]);
+
+        return medicamentoSelecionado;
     }
 
     public List<Medicamento> SelecionarTodos()
@@ -128,10 +135,14 @@ public sealed class RepositorioMedicamentoEmSql(ISqlConnectionFactory connection
 
         conexao.Open();
 
-        return conexao
+        List<Medicamento> medicamentosSelecionados = conexao
             .Query<MedicamentoRow>(SelecionarTodosMedicamentosSql)
             .Select(MapearMedicamento)
             .ToList();
+
+        CarregarRequisicoes(medicamentosSelecionados);
+
+        return medicamentosSelecionados;
     }
 
     public List<Medicamento> Filtrar(Predicate<Medicamento> filtro)
@@ -154,6 +165,44 @@ public sealed class RepositorioMedicamentoEmSql(ISqlConnectionFactory connection
                 Cnpj = medicamentoRow.FornecedorCnpj
             }
         };
+    }
+
+    private void CarregarRequisicoes(List<Medicamento> medicamentos)
+    {
+        if (medicamentos.Count == 0)
+            return;
+
+        Dictionary<Guid, Medicamento> medicamentosPorId = medicamentos.ToDictionary(m => m.Id);
+
+        // Requisições de Entrada
+        List<RequisicaoEntrada> requisicoesEntrada = repositorioRequisicao.SelecionarRequisicoesEntrada();
+
+        foreach (RequisicaoEntrada requisicaoEntrada in requisicoesEntrada)
+        {
+            if (!medicamentosPorId.TryGetValue(requisicaoEntrada.Medicamento.Id, out Medicamento? medicamento))
+                continue;
+
+            requisicaoEntrada.Medicamento = medicamento;
+
+            medicamento.RegistrarRequisicao(requisicaoEntrada);
+        }
+
+        // Requisições de Saída
+        List<RequisicaoSaida> requisicoesSaida = repositorioRequisicao.SelecionarRequisicoesSaida();
+
+        foreach (RequisicaoSaida requisicaoSaida in requisicoesSaida)
+        {
+            foreach (MedicamentoPrescrito medicamentoPrescrito in requisicaoSaida.MedicamentosPrescritos)
+            {
+                if (!medicamentosPorId.TryGetValue(medicamentoPrescrito.Medicamento.Id, out Medicamento? medicamento))
+                    continue;
+
+                medicamentoPrescrito.Medicamento = medicamento;
+
+                if (!medicamento.Requisicoes.Contains(requisicaoSaida))
+                    medicamento.RegistrarRequisicao(requisicaoSaida);
+            }
+        }
     }
 }
 
